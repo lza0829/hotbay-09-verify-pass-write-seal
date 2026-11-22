@@ -29,6 +29,7 @@ export const api = {
   inventory: () => req('/目录清单'),
   verifyRuns: () => req('/互证流水'),
   runVerify: () => req('/互证', { method: 'POST', body: '{}' }),
+  writeGate: (day) => req(`/写闸探针${day ? `?营业日=${encodeURIComponent(day)}` : ''}`),
   settings: () => req('/设置'),
   setDay: (营业日) => req('/设置/营业日', { method: 'POST', body: JSON.stringify({ 营业日 }) }),
 }

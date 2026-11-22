@@ -1,6 +1,7 @@
 from __future__ import annotations
 from fastapi import APIRouter
 from app.db import db
+from app.services import gate
 
 router = APIRouter(tags=["总览"])
 
@@ -22,5 +23,7 @@ def overview():
             "最近互证": (
                 lambda r: dict(r) if r else None
             )(conn.execute("SELECT status, drift_count, created_at FROM verify_runs ORDER BY id DESC LIMIT 1").fetchone()),
+            # 总览与写入口读同一套重放结论，避免「总览说封印、入口却放行」或反向分裂。
+            "写闸": gate.probe(conn),
             "片库间": [dict(x) for x in conn.execute("SELECT id, name, capacity, active FROM vaults ORDER BY id").fetchall()],
         }

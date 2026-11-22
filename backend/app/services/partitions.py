@@ -1,6 +1,7 @@
 from __future__ import annotations
 from fastapi import HTTPException
 from app.db import db
+from app.services import gate
 from app.services.core import now, require_tier, vault_partition_count
 
 
@@ -23,7 +24,10 @@ def list_partitions(conn=None):
 
 def create_partition(part_key: str, title: str, release_day: str, vault_id: int, tier: str, object_prefix: str, clips: list):
     tier = require_tier(tier)
-    with db() as conn:
+    with db(write=True) as conn:
+        # 登记会同时写入分区、素材段与目录对象；封印时在写第一行前就拒绝，
+        # 不会留下只登记一半的分区或孤立目录对象。
+        gate.enforce(conn, "分区登记")
         v = conn.execute("SELECT * FROM vaults WHERE id=?", (vault_id,)).fetchone()
         if not v or not v["active"]:
             raise HTTPException(400, detail="片库间不可用")

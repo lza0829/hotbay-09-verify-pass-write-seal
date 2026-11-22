@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import SealBadge from '../components/SealBadge'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function Partitions() {
   const [rows, setRows] = useState([])
   const [vaults, setVaults] = useState([])
+  const [gate, setGate] = useState(null)
   const [msg, setMsg] = useState('')
   const [form, setForm] = useState({
     part_key: '', title: '', release_day: today(), vault_id: 1, tier: '热档', object_prefix: 'reel/新片/',
     clip_key: '', clip_bytes: 5000000, clip_note: '正片段',
   })
-  const reload = () => api.partitions().then(setRows)
+  const reload = () => { api.partitions().then(setRows); api.writeGate().then(setGate) }
   useEffect(() => { reload(); api.vaults().then(setVaults) }, [])
   async function submit(e) {
     e.preventDefault()
@@ -28,11 +30,12 @@ export default function Partitions() {
       })
       setMsg('登记成功')
       reload()
-    } catch (err) { setMsg(err.message) }
+    } catch (err) { setMsg(err.message); reload() }
   }
   return (
     <div className="page">
       <h1>分区册</h1>
+      <SealBadge gate={gate} />
       <form className="panel form" onSubmit={submit}>
         <h2>热档登记</h2>
         <label>分区键<input value={form.part_key} onChange={e => setForm({ ...form, part_key: e.target.value })} required /></label>
@@ -47,7 +50,7 @@ export default function Partitions() {
         <label>对象前缀<input value={form.object_prefix} onChange={e => setForm({ ...form, object_prefix: e.target.value })} /></label>
         <label>素材对象键<input value={form.clip_key} onChange={e => setForm({ ...form, clip_key: e.target.value })} placeholder="可空则自动" /></label>
         <label>字节数<input type="number" value={form.clip_bytes} onChange={e => setForm({ ...form, clip_bytes: e.target.value })} /></label>
-        <button type="submit">登记分区</button>
+        <button type="submit" disabled={gate?.封印}>登记分区</button>
         {msg && <p className="msg">{msg}</p>}
       </form>
       <div className="table-wrap">

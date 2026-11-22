@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import SealBadge from '../components/SealBadge'
 
 export default function Home() {
   const [o, setO] = useState(null)
@@ -11,6 +12,7 @@ export default function Home() {
     ['热档', o.热档], ['温档', o.温档], ['冷档', o.冷档],
     ['迁移执行中', o.迁移执行中], ['待销毁候选', o.待销毁候选], ['目录对象', o.目录对象],
   ]
+  const gate = o.写闸
   return (
     <div className="page">
       <header className="hero">
@@ -18,6 +20,7 @@ export default function Home() {
         <h1>热档片间</h1>
         <p className="lede">分区在册，冷热可迁，片龄到期可销毁，目录与元数据互证。</p>
       </header>
+      {gate && <SealBadge gate={gate} />}
       <div className="stat-grid">
         {cards.map(([k, v]) => (
           <div className="stat" key={k}><span>{k}</span><strong>{v}</strong></div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from fastapi import HTTPException
 from app.db import db
+from app.services import gate
 from app.services.core import can_migrate, now, partition_row, require_tier
 
 
@@ -15,7 +16,7 @@ def list_jobs():
 
 def start_migrate(partition_id: int, to_tier: str):
     to_tier = require_tier(to_tier)
-    with db() as conn:
+    with db(write=True) as conn:
         p = partition_row(conn, partition_id)
         if p["status"] != "在册":
             raise HTTPException(400, detail="仅在册分区可迁移")
@@ -35,13 +36,16 @@ def start_migrate(partition_id: int, to_tier: str):
 
 
 def finish_migrate(job_id: int, success: bool = True):
-    with db() as conn:
+    with db(write=True) as conn:
         j = conn.execute("SELECT * FROM migrate_jobs WHERE id=?", (job_id,)).fetchone()
         if not j:
             raise HTTPException(404, detail="迁移单不存在")
         if j["status"] != "执行中":
             raise HTTPException(400, detail="迁移单不在执行中")
         if success:
+            # 迁移完成会改分区的温层→档案与目录将出现新漂移，故由写闸判定；
+            # 判定与 UPDATE 同事务，被拒时整单不落库（迁移单保持执行中）。
+            gate.enforce(conn, "迁移完成")
             conn.execute("UPDATE partitions SET tier=? WHERE id=?", (j["to_tier"], j["partition_id"]))
             conn.execute(
                 "UPDATE migrate_jobs SET status='已完成', finished_at=? WHERE id=?",

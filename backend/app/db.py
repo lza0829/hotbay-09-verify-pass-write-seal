@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS verify_runs (
   status TEXT NOT NULL,
   drift_count INTEGER NOT NULL,
   detail TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  biz_day TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -82,25 +83,39 @@ CREATE TABLE IF NOT EXISTS settings (
 
 
 def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    # isolation_level=None：事务由 db() 显式 BEGIN/COMMIT，避免隐式事务与
+    # BEGIN IMMEDIATE 抢锁顺序不可控。busy_timeout 让并发写等待而非立刻报错。
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
 
 @contextmanager
-def db():
+def db(write: bool = False):
     conn = connect()
     try:
+        # 写事务一律 BEGIN IMMEDIATE：互证流水与三个写入口在同一把写锁下串行，
+        # 闸门判定和实际写入之间不会被另一条写事务插入。
+        conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
         yield conn
-        conn.commit()
+        conn.execute("COMMIT")
     except Exception:
-        conn.rollback()
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         raise
     finally:
         conn.close()
 
 
 def init_db() -> None:
-    with db() as conn:
+    conn = connect()
+    try:
         conn.executescript(SCHEMA)
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(verify_runs)").fetchall()}
+        if "biz_day" not in cols:
+            conn.execute("ALTER TABLE verify_runs ADD COLUMN biz_day TEXT NOT NULL DEFAULT ''")
+        conn.execute("UPDATE verify_runs SET biz_day=substr(created_at,1,10) WHERE biz_day=''")
+    finally:
+        conn.close()

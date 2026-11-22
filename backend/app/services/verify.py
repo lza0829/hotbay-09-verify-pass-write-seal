@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from app.db import db
-from app.services.core import now
+from app.services.core import current_biz_day, now
 
 
 def inventory_list():
@@ -10,7 +10,8 @@ def inventory_list():
 
 
 def run_verify():
-    with db() as conn:
+    with db(write=True) as conn:
+        biz_day = current_biz_day(conn)
         meta_keys = {
             r["object_key"]: r["bytes"]
             for r in conn.execute(
@@ -37,16 +38,23 @@ def run_verify():
             drifts.append({"对象键": k, "问题": "字节不一致"})
         status = "一致" if not drifts else "漂移"
         cur = conn.execute(
-            "INSERT INTO verify_runs(status, drift_count, detail, created_at) VALUES (?,?,?,?)",
-            (status, len(drifts), json.dumps(drifts, ensure_ascii=False), now()),
+            "INSERT INTO verify_runs(status, drift_count, detail, created_at, biz_day) VALUES (?,?,?,?,?)",
+            (status, len(drifts), json.dumps(drifts, ensure_ascii=False), now(), biz_day),
         )
+        run_id = cur.lastrowid
+        # 同一事务内取封印态，响应即反映本次互证落库后的真实闸态。
+        from app.services.gate import probe as gate_probe
+
+        seal = gate_probe(conn)
         return {
-            "run_id": cur.lastrowid,
+            "run_id": run_id,
             "status": status,
             "drift_count": len(drifts),
             "drifts": drifts,
             "meta_count": len(meta_keys),
             "inventory_count": len(inv_keys),
+            "营业日": biz_day,
+            "写闸": seal,
         }
 
 

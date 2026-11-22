@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import HTTPException
 from app.config import TIER_ORDER, TIERS
 
@@ -26,6 +26,12 @@ def partition_row(conn, pid: int):
     if not row:
         raise HTTPException(404, detail="分区不存在")
     return row
+
+
+def current_biz_day(conn) -> str:
+    """营业日以设置里的『营业日』为准；未设置时回落到自然日。"""
+    row = conn.execute("SELECT value FROM settings WHERE key='营业日'").fetchone()
+    return row["value"] if row else date.today().isoformat()
 
 
 def can_migrate(from_tier: str, to_tier: str) -> bool:

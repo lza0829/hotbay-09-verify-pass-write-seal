@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import date
 from fastapi import HTTPException
 from app.db import db
+from app.services import gate
 from app.services.core import now, partition_row
 
 
@@ -25,10 +26,12 @@ def list_destroys():
 def run_retention(policy_id: int, mode: str = "连目录销毁"):
     if mode not in ("连目录销毁", "只删元数据"):
         raise HTTPException(400, detail="销毁模式无效")
-    with db() as conn:
+    with db(write=True) as conn:
         pol = conn.execute("SELECT * FROM retention_policies WHERE id=? AND active=1", (policy_id,)).fetchone()
         if not pol:
             raise HTTPException(404, detail="保留策略不存在")
+        # 先判闸再动任何一行：封印时整批拒绝，不会出现已删部分目录的半截销毁。
+        gate.enforce(conn, "保留销毁")
         biz = conn.execute("SELECT value FROM settings WHERE key='营业日'").fetchone()
         today = date.fromisoformat(biz["value"] if biz else date.today().isoformat())
         parts = conn.execute("SELECT * FROM partitions WHERE status='在册'").fetchall()

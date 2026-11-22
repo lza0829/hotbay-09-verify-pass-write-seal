@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import SealBadge from '../components/SealBadge'
 
 export default function Migrates() {
   const [parts, setParts] = useState([])
   const [jobs, setJobs] = useState([])
+  const [gate, setGate] = useState(null)
   const [pid, setPid] = useState('')
   const [to, setTo] = useState('冷档')
   const [msg, setMsg] = useState('')
-  const reload = () => { api.partitions().then(setParts); api.migrates().then(setJobs) }
+  const reload = () => { api.partitions().then(setParts); api.migrates().then(setJobs); api.writeGate().then(setGate) }
   useEffect(() => { reload() }, [])
   async function start() {
     setMsg('')
@@ -22,11 +24,12 @@ export default function Migrates() {
       const r = await api.finishMigrate(id, ok)
       setMsg(`迁移单 ${r.job_id} → ${r.status}`)
       reload()
-    } catch (e) { setMsg(e.message) }
+    } catch (e) { setMsg(e.message); reload() }
   }
   return (
     <div className="page">
       <h1>冷热迁移</h1>
+      <SealBadge gate={gate} />
       <div className="panel form row">
         <label>分区<select value={pid} onChange={e => setPid(e.target.value)}>
           <option value="">选择</option>
@@ -47,7 +50,7 @@ export default function Migrates() {
                 <td>{j.id}</td><td>{j.part_key}</td><td>{j.from_tier}</td><td>{j.to_tier}</td><td>{j.status}</td>
                 <td>{j.status === '执行中' && (
                   <>
-                    <button type="button" onClick={() => finish(j.id, true)}>完成</button>
+                    <button type="button" onClick={() => finish(j.id, true)} disabled={gate?.封印}>完成</button>
                     <button type="button" className="ghost" onClick={() => finish(j.id, false)}>失败回滚</button>
                   </>
                 )}</td>
@@ -56,6 +59,7 @@ export default function Migrates() {
           </tbody>
         </table>
       </div>
+      <p className="muted">发起迁移不改档案；封印只挡「完成」。失败回滚不改温层，不受写闸限制。</p>
     </div>
   )
 }

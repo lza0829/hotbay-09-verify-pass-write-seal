@@ -136,6 +136,11 @@ table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #4a3038; }
 th { color: var(--amber); font-weight: 600; }
 .plain { padding-left: 1.1em; color: var(--muted); }
+.seal { border-left: 4px solid var(--ok); }
+.seal.on { border-left-color: var(--danger); background: rgba(60, 12, 18, .8); }
+.seal h2 { color: var(--ok); }
+.seal.on h2 { color: var(--danger); }
+button:disabled { opacity: .45; cursor: not-allowed; }
 .msg { color: var(--ok); }
 .err { color: var(--danger); }
 .muted { color: var(--muted); }
